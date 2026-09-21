@@ -1,0 +1,21 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Environment variables
+.env
+
+# Generated audio files
+outputs/*.mp3
+
+# Test / lint caches
+.pytest_cache/
+.ruff_cache/
+
