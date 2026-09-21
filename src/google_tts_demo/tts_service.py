@@ -49,6 +49,37 @@ class GoogleTTSService:
             self._client = texttospeech.TextToSpeechClient()
         return self._client
 
+    def build_request_payload(
+        self,
+        text: str,
+        profile_name: str,
+        voice_name: str | None = None,
+        custom_prompt: str | None = None,
+    ) -> dict:
+        """Construye el payload (JSON-serializable) que se enviara al SDK de Google Cloud TTS.
+
+        Refleja exactamente los parametros usados en `synthesize()`, para poder
+        previsualizar la solicitud sin llamar a la API.
+        """
+        profile = get_profile(profile_name)
+        resolved_voice = voice_name or profile.voice_name
+        resolved_prompt = custom_prompt if custom_prompt is not None else profile.prompt
+
+        return {
+            "input": {
+                "text": text,
+                "prompt": resolved_prompt,
+            },
+            "voice": {
+                "language_code": profile.language_code,
+                "name": resolved_voice,
+                "model_name": self._settings.tts_model,
+            },
+            "audio_config": {
+                "audio_encoding": "MP3",
+            },
+        }
+
     def synthesize(
         self,
         text: str,
@@ -63,17 +94,22 @@ class GoogleTTSService:
         TTSSynthesisError si falla la llamada a Google Cloud TTS.
         """
         profile = get_profile(profile_name)
-        resolved_voice = voice_name or profile.voice_name
-        resolved_prompt = custom_prompt if custom_prompt is not None else profile.prompt
+        payload = self.build_request_payload(
+            text=text,
+            profile_name=profile_name,
+            voice_name=voice_name,
+            custom_prompt=custom_prompt,
+        )
+        resolved_voice = payload["voice"]["name"]
 
         synthesis_input = texttospeech.SynthesisInput(
-            text=text,
-            prompt=resolved_prompt,
+            text=payload["input"]["text"],
+            prompt=payload["input"]["prompt"],
         )
         voice_params = texttospeech.VoiceSelectionParams(
-            language_code=profile.language_code,
-            name=resolved_voice,
-            model_name=self._settings.tts_model,
+            language_code=payload["voice"]["language_code"],
+            name=payload["voice"]["name"],
+            model_name=payload["voice"]["model_name"],
         )
         audio_config = texttospeech.AudioConfig(
             audio_encoding=texttospeech.AudioEncoding.MP3,
