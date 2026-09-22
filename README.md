@@ -34,9 +34,11 @@ Playground (playground.py) ───┘
 
 - `config.py`: configuración vía `pydantic-settings` (proyecto GCP, modelo, voz por defecto,
   directorio de salida, host/puerto del Playground).
-- `models.py`: modelos Pydantic (`TTSProfile`, `TTSRequest`, `TTSResult`).
+- `models.py`: modelos Pydantic (`TTSProfile`, `TTSRequest`, `TTSResult`, `TTSCost`).
 - `profiles.py`: registro centralizado de perfiles de idioma/acento y de la lista de voces
   disponibles (una única fuente de verdad, reutilizada por CLI y Playground).
+- `pricing.py`: cálculo del costo estimado (USD) de cada síntesis según los precios de
+  Gemini-TTS (ver sección 10).
 - `tts_service.py`: **único** punto de integración con Google Cloud TTS (`GoogleTTSService`).
   Tanto la CLI como el Playground lo utilizan; la lógica de síntesis no está duplicada.
 - `main.py`: CLI basada en `argparse`.
@@ -185,6 +187,14 @@ Argentina, Português Brasil/São Paulo/Rio, English US/UK/Latin Accent.
 En el dropdown **Voice**, elige entre las voces centralizadas en `profiles.py`
 (Kore por defecto).
 
+### Seleccionar modelo
+
+En el dropdown **Model** (junto al de Idioma / Perfil, y compartido por las pestañas
+**Generate** y **Compare Voices**), elige el modelo Gemini TTS a utilizar entre los
+disponibles en `pricing.py` (`gemini-2.5-flash-tts` por defecto, `gemini-2.5-flash-lite-preview-tts`,
+`gemini-2.5-pro-tts`, `gemini-3.1-flash-tts-preview`). El modelo elegido afecta tanto la
+llamada a la API como el costo estimado mostrado en el resultado (ver sección 10).
+
 ### Personalizar el prompt
 
 Al cambiar de perfil, el campo **Voice Prompt / Style** se actualiza automáticamente con el
@@ -199,7 +209,8 @@ experimentar con acento, tono, emoción, velocidad, formalidad y naturalidad.
 4. El estado muestra `Generating audio...` y luego `Audio generated successfully`.
 5. El reproductor de audio permite escuchar el resultado inmediatamente.
 6. El componente de descarga permite obtener el MP3 generado (guardado también en `outputs/`).
-7. Se muestra información técnica: Profile, Language, Voice, Model, Characters, File.
+7. Se muestra información técnica: Profile, Language, Voice, Model, Characters, Generation
+   time, Audio duration, **Cost** (ver sección 10), File.
 
 ### Comparar voces
 
@@ -215,10 +226,39 @@ una sola persona frente a cámara, iluminación, captura correcta/incorrecta).
 
 ### Historial de la sesión
 
-Una tabla registra Profile, Language, Voice, Characters y Filename de cada audio generado
-durante la sesión actual del Playground (en memoria, sin base de datos).
+Una tabla registra Profile, Language, Voice, Characters, Time (s), Audio (s), Cost (USD) y
+Filename de cada audio generado durante la sesión actual del Playground (en memoria, sin base
+de datos).
 
-## 10. Ubicación de los MP3 generados
+## 10. Costos y precios
+
+Cada audio generado (CLI y Playground) incluye un **costo estimado en USD**, calculado en
+`pricing.py` según los precios oficiales de Gemini-TTS en Google Cloud:
+
+| Modelo                              | Tokens de entrada (texto) | Tokens de salida (audio) |
+|--------------------------------------|----------------------------|----------------------------|
+| `gemini-2.5-flash-tts` (por defecto) | $0.50 por 1M tokens         | $10.00 por 1M tokens        |
+| `gemini-2.5-flash-lite-preview-tts`  | $0.50 por 1M tokens         | $10.00 por 1M tokens        |
+| `gemini-2.5-pro-tts`                 | $1.00 por 1M tokens         | $20.00 por 1M tokens        |
+| `gemini-3.1-flash-tts-preview`       | $1.00 por 1M tokens         | $20.00 por 1M tokens        |
+
+Notas sobre el cálculo:
+
+- **Tokens de audio de salida**: se calculan a partir de la duración real del MP3 generado
+  (leída con `mutagen`), usando la equivalencia oficial de **25 tokens por segundo de audio**.
+  Este costo es exacto.
+- **Tokens de texto de entrada**: la API de Cloud TTS no devuelve el conteo real de tokens, por
+  lo que se **estiman** con la aproximación estándar de Gemini de ~4 caracteres por token. Este
+  costo es una aproximación razonable, no un valor exacto.
+- Si se configura un modelo (`TTS_MODEL`) que no está en la tabla anterior, se usa como
+  respaldo la tarifa de `gemini-2.5-flash-tts`.
+
+Precios de referencia oficiales (consultados 2026-09-21):
+[Google Cloud Text-to-Speech — Pricing](https://cloud.google.com/text-to-speech/pricing)
+(sección "Gemini-TTS"). Documentación general del modelo:
+[Gemini-TTS | Cloud Text-to-Speech](https://cloud.google.com/text-to-speech/docs/gemini-tts).
+
+## 11. Ubicación de los MP3 generados
 
 Todos los archivos se guardan en `outputs/` con el formato:
 
@@ -228,7 +268,7 @@ Todos los archivos se guardan en `outputs/` con el formato:
 
 Ejemplo: `outputs/es-pe_Kore_20260921_155500.mp3`.
 
-## 11. Ejecutar tests
+## 12. Ejecutar tests
 
 ```bash
 uv run pytest
@@ -237,7 +277,7 @@ uv run pytest
 Los tests usan mocks (`pytest-mock` / `unittest.mock`) para el cliente de Google Cloud TTS: no
 se realiza ninguna llamada real a la API de Google en la suite de tests.
 
-## 12. Ejecutar Ruff
+## 13. Ejecutar Ruff
 
 Lint:
 
@@ -251,7 +291,7 @@ Formato:
 uv run ruff format .
 ```
 
-## 13. Resumen de comandos
+## 14. Resumen de comandos
 
 ```bash
 uv sync

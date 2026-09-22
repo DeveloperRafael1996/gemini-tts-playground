@@ -6,6 +6,7 @@ import gradio as gr
 
 from google_tts_demo.config import settings
 from google_tts_demo.exceptions import TTSException
+from google_tts_demo.pricing import AVAILABLE_MODELS
 from google_tts_demo.profiles import (
     AVAILABLE_VOICES,
     DEFAULT_VOICE,
@@ -21,6 +22,11 @@ service = GoogleTTSService()
 
 PROFILE_CHOICES = [(profile.display_name, profile.name) for profile in list_profiles()]
 DEFAULT_PROFILE = "es-pe"
+
+MODEL_CHOICES = AVAILABLE_MODELS
+DEFAULT_MODEL = (
+    settings.tts_model if settings.tts_model in MODEL_CHOICES else MODEL_CHOICES[0]
+)
 
 # Voces agrupadas por genero (Female primero, luego Male) y ordenadas
 # alfabeticamente dentro de cada grupo, para poder identificarlas en la UI.
@@ -58,7 +64,17 @@ QUICK_EXAMPLES = [
 ]
 
 COMPARISON_SLOTS = len(AVAILABLE_VOICES)
-HISTORY_HEADERS = ["Profile", "Language", "Voice", "Gender", "Characters", "Time (s)", "Filename"]
+HISTORY_HEADERS = [
+    "Profile",
+    "Language",
+    "Voice",
+    "Gender",
+    "Characters",
+    "Time (s)",
+    "Audio (s)",
+    "Cost (USD)",
+    "Filename",
+]
 
 MODAL_CSS = """
 .request-modal-overlay {
@@ -100,6 +116,7 @@ def _load_example(profile_name: str, text: str) -> tuple[str, str, str]:
 def _generate_audio(
     profile_name: str,
     voice_name: str,
+    model_name: str,
     text: str,
     prompt: str,
     history: list[list[str]],
@@ -123,6 +140,7 @@ def _generate_audio(
             profile_name=profile_name,
             voice_name=voice_name,
             custom_prompt=prompt,
+            model_name=model_name,
         )
     except TTSException as exc:
         logger.exception("Error generating audio in playground")
@@ -137,9 +155,13 @@ def _generate_audio(
         f"**Profile:** {profile_name}\n\n"
         f"**Language:** {result.language_code}\n\n"
         f"**Voice:** {result.voice} ({voice_gender(result.voice)})\n\n"
-        f"**Model:** {settings.tts_model}\n\n"
+        f"**Model:** {result.cost.model}\n\n"
         f"**Characters:** {len(text)}\n\n"
         f"**Generation time:** {result.duration_seconds:.2f}s\n\n"
+        f"**Audio duration:** {result.audio_duration_seconds:.2f}s\n\n"
+        f"**Cost:** ${result.cost.total_cost_usd:.6f} USD "
+        f"(input: {result.cost.input_tokens} tok = ${result.cost.input_cost_usd:.6f}, "
+        f"output: {result.cost.output_tokens} tok = ${result.cost.output_cost_usd:.6f})\n\n"
         f"**File:** {result.output_path}"
     )
 
@@ -150,6 +172,8 @@ def _generate_audio(
         voice_gender(result.voice),
         str(len(text)),
         f"{result.duration_seconds:.2f}",
+        f"{result.audio_duration_seconds:.2f}",
+        f"{result.cost.total_cost_usd:.6f}",
         result.output_path,
     ]
     updated_history = [*history, new_row]
@@ -167,6 +191,7 @@ def _generate_audio(
 def _compare_voices(
     profile_name: str,
     voice_names: list[str],
+    model_name: str,
     text: str,
     prompt: str,
     history: list[list[str]],
@@ -190,6 +215,7 @@ def _compare_voices(
             profile_name=profile_name,
             voice_names=voice_names,
             custom_prompt=prompt,
+            model_name=model_name,
         )
     except TTSException as exc:
         logger.exception("Error comparing voices in playground")
@@ -212,7 +238,8 @@ def _compare_voices(
                     value=result.output_path,
                     label=(
                         f"{result.voice} ({gender}, {result.language_code}, "
-                        f"{result.duration_seconds:.2f}s)"
+                        f"{result.duration_seconds:.2f}s, "
+                        f"${result.cost.total_cost_usd:.6f})"
                     ),
                 )
             )
@@ -224,6 +251,8 @@ def _compare_voices(
                     gender,
                     str(len(text)),
                     f"{result.duration_seconds:.2f}",
+                    f"{result.audio_duration_seconds:.2f}",
+                    f"{result.cost.total_cost_usd:.6f}",
                     result.output_path,
                 ]
             )
@@ -238,6 +267,7 @@ def _compare_voices(
 def _preview_single_request(
     profile_name: str,
     voice_name: str,
+    model_name: str,
     text: str,
     prompt: str,
 ):
@@ -246,6 +276,7 @@ def _preview_single_request(
         profile_name=profile_name,
         voice_name=voice_name,
         custom_prompt=prompt,
+        model_name=model_name,
     )
     return payload, gr.update(visible=True)
 
@@ -253,6 +284,7 @@ def _preview_single_request(
 def _preview_compare_requests(
     profile_name: str,
     voice_names: list[str],
+    model_name: str,
     text: str,
     prompt: str,
 ):
@@ -262,6 +294,7 @@ def _preview_compare_requests(
             profile_name=profile_name,
             voice_name=voice_name,
             custom_prompt=prompt,
+            model_name=model_name,
         )
         for voice_name in (voice_names or [])
     ]
@@ -288,6 +321,11 @@ def build_interface() -> gr.Blocks:
                     choices=PROFILE_CHOICES,
                     value=DEFAULT_PROFILE,
                     label="Language / Profile",
+                )
+                model_dropdown = gr.Dropdown(
+                    choices=MODEL_CHOICES,
+                    value=DEFAULT_MODEL,
+                    label="Model",
                 )
                 text_box = gr.Textbox(
                     label="Text",
@@ -351,9 +389,9 @@ def build_interface() -> gr.Blocks:
                     with gr.Tab("History"):
                         history_table = gr.Dataframe(
                             headers=HISTORY_HEADERS,
-                            datatype=["str", "str", "str", "str", "str", "str", "str"],
+                            datatype=["str"] * len(HISTORY_HEADERS),
                             row_count=(0, "dynamic"),
-                            column_count=(7, "fixed"),
+                            column_count=(len(HISTORY_HEADERS), "fixed"),
                             value=[],
                         )
 
@@ -368,7 +406,14 @@ def build_interface() -> gr.Blocks:
 
         generate_btn.click(
             _generate_audio,
-            inputs=[profile_dropdown, voice_dropdown, text_box, prompt_box, history_state],
+            inputs=[
+                profile_dropdown,
+                voice_dropdown,
+                model_dropdown,
+                text_box,
+                prompt_box,
+                history_state,
+            ],
             outputs=[
                 status_md,
                 audio_player,
@@ -381,19 +426,26 @@ def build_interface() -> gr.Blocks:
 
         compare_btn.click(
             _compare_voices,
-            inputs=[profile_dropdown, comparison_voices, text_box, prompt_box, history_state],
+            inputs=[
+                profile_dropdown,
+                comparison_voices,
+                model_dropdown,
+                text_box,
+                prompt_box,
+                history_state,
+            ],
             outputs=[compare_status, *comparison_audios, history_state, history_table],
         )
 
         preview_btn.click(
             _preview_single_request,
-            inputs=[profile_dropdown, voice_dropdown, text_box, prompt_box],
+            inputs=[profile_dropdown, voice_dropdown, model_dropdown, text_box, prompt_box],
             outputs=[request_json, request_modal],
         )
 
         compare_preview_btn.click(
             _preview_compare_requests,
-            inputs=[profile_dropdown, comparison_voices, text_box, prompt_box],
+            inputs=[profile_dropdown, comparison_voices, model_dropdown, text_box, prompt_box],
             outputs=[request_json, request_modal],
         )
 

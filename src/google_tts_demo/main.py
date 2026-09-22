@@ -61,7 +61,10 @@ def main(argv: list[str] | None = None) -> int:
                 voice_names=voice_names,
             )
             for result in results:
-                print(f"Generado: {result.output_path} (voice={result.voice})")
+                print(
+                    f"Generado: {result.output_path} (voice={result.voice}) "
+                    f"- costo estimado: ${result.cost.total_cost_usd:.6f} USD"
+                )
         else:
             result = service.synthesize(
                 text=args.text,
@@ -70,6 +73,13 @@ def main(argv: list[str] | None = None) -> int:
                 voice_name=args.voice,
             )
             print(f"Generado: {result.output_path}")
+            print(
+                f"Costo estimado: ${result.cost.total_cost_usd:.6f} USD "
+                f"(entrada: {result.cost.input_tokens} tokens = "
+                f"${result.cost.input_cost_usd:.6f}, "
+                f"salida: {result.cost.output_tokens} tokens = "
+                f"${result.cost.output_cost_usd:.6f})"
+            )
     except TTSException as exc:
         logger.error("Error: %s", exc)
         print(f"Error: {exc}", file=sys.stderr)
