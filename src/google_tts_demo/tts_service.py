@@ -94,6 +94,8 @@ class GoogleTTSService:
             },
             "audio_config": {
                 "audio_encoding": "MP3",
+                "pitch": 0.0,
+                "speaking_rate": 1.0,
             },
         }
 
@@ -132,8 +134,8 @@ class GoogleTTSService:
         )
         audio_config = texttospeech.AudioConfig(
             audio_encoding=texttospeech.AudioEncoding.MP3,
-            pitch=0.0,
-            speaking_rate=1.0,
+            pitch=payload["audio_config"]["pitch"],
+            speaking_rate=payload["audio_config"]["speaking_rate"],
         )
 
         logger.info(

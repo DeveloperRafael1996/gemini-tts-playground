@@ -454,10 +454,14 @@ def build_interface() -> gr.Blocks:
     return demo
 
 
+# Modulo-level: requerido por `gradio` en modo watch/reload para poder
+# localizar y reemplazar la interfaz cuando cambian los archivos fuente.
+demo = build_interface()
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     settings.ensure_output_dir()
-    demo = build_interface()
     print("Google Gemini TTS Playground\n")
     print(f"Running on:\n\nhttp://{settings.playground_host}:{settings.playground_port}\n")
     demo.launch(

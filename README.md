@@ -177,6 +177,18 @@ Abre en el navegador:
 http://127.0.0.1:7860
 ```
 
+### Modo desarrollo con recarga en caliente (hot reload)
+
+Para que los cambios en el código (`playground.py`, `tts_service.py`, `profiles.py`, etc.) se
+reflejen automáticamente en el navegador sin detener ni reiniciar el servidor manualmente:
+
+```bash
+uv run gradio src/google_tts_demo/playground.py --demo-name demo
+```
+
+Este comando vigila todo el directorio `src/google_tts_demo/` y, al guardar cualquier archivo
+`.py`, reconstruye la interfaz y la reemplaza en caliente en el navegador ya abierto.
+
 ### Seleccionar idioma / acento
 
 En el dropdown **Idioma / Perfil**, elige entre Español Latinoamérica, Perú, México, Colombia,
